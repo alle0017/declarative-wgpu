@@ -125,6 +125,7 @@ export const ThreadRenderingMsg = {
       writeGlobal: 'write-global',
       updateCamera: 'move-camera',
       createCamera: 'create-camera',
+      freeEntity: 'free-entity',
 }
 
 export const DEFAULT_CAMERA_BUFFER_ID = '__default__cameraBuffer__';

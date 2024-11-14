@@ -155,20 +155,31 @@ export default class Drawer {
        * @param {GPURenderPassEncoder} pass 
        */
       #draw( pass ){
+            
 
             for( let i = 0; i < this.#entities.length; i++ ){
+                  this.#device.pushErrorScope('out-of-memory');
+                  this.#device.pushErrorScope('validation');
+                  this.#device.pushErrorScope('internal');
+
                   pass.setPipeline( this.#entities[i].pipeline );
 
                   if( this.#entities[i].vertexBuffer )
                         pass.setVertexBuffer( 0, this.#entities[i].vertexBuffer );
 
                   if( this.#entities[i].bindGroups ){
-                        for( let j = 0; j < this.#entities[i].bindGroups.length; j++ )
+                        for( let j = 0; j < this.#entities[i].bindGroups.length; j++ ){
                               pass.setBindGroup( j, this.#entities[i].bindGroups[j] );
+                        }
                   }
                   pass.setIndexBuffer( this.#entities[i].indexBuffer, this.#entities[i].indexType );
 
                   pass.drawIndexed( this.#entities[i].vertexCount );
+
+
+                  this.#device.popErrorScope().then( error => {
+                        error && console.error( error.message );
+                  });
             }
       }
 
@@ -225,6 +236,10 @@ export default class Drawer {
       }
 
       draw(){
+            this.#device.pushErrorScope('out-of-memory');
+            this.#device.pushErrorScope('validation');
+            this.#device.pushErrorScope('internal');
+            
             const { commandEncoder, pass } = this.#createCommandEncoder();
             const activeCameras = [...(this.#cameras.get( this.#sceneId ) || []).values()];
 
@@ -246,6 +261,10 @@ export default class Drawer {
             }
 
             this.#submitPipeline( commandEncoder, pass );
+            
+            this.#device.popErrorScope().then( error => {
+                  error && console.error( error.message );
+            });
       }
 
       /**
@@ -274,6 +293,7 @@ export default class Drawer {
       updateCamera( buffer, sceneId, cameraId ) {
             
             if( !this.#cameras.has( sceneId ) ){
+                  console.log( this.#cameras )
                   throw new Error(`[wgpu] scene ${sceneId} does not exist`);
             }
 

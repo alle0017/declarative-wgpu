@@ -1,7 +1,7 @@
 import { Type } from "../enums.js";
 import Scene from "../scene.js";
 
-/**@import {GPUApp, Mat4x4, PerspectiveCameraDescriptor} from "../type.d.ts" */
+/**@import { Mat4x4, CameraMovement } from "../type.d.ts" */
 /**@import Game from "../../game.js" */
 
 /**
@@ -63,10 +63,9 @@ export default class Camera {
                   return;
             this.#position.x = value;
 
-            this.#game.writeGlobalBuffer( 
-                  'camera',
-                  0, 
-                  Type.f32, 
+            this.#game.moveCamera( 
+                  this.#sceneId,
+                  this.#id,
                   this.multiply( 
                         this.getViewMatrix(),
                         this.getMatrix(),
@@ -82,10 +81,9 @@ export default class Camera {
                   return;
             this.#position.y = value;
 
-            this.#game.writeGlobalBuffer( 
-                  'camera',
-                  0, 
-                  Type.f32, 
+            this.#game.moveCamera( 
+                  this.#sceneId,
+                  this.#id,
                   this.multiply( 
                         this.getViewMatrix(),
                         this.getMatrix(),
@@ -101,10 +99,9 @@ export default class Camera {
                   return;
             this.#position.z = value;
 
-            this.#game.writeGlobalBuffer( 
-                  'camera',
-                  0, 
-                  Type.f32, 
+            this.#game.moveCamera( 
+                  this.#sceneId,
+                  this.#id,
                   this.multiply( 
                         this.getViewMatrix(),
                         this.getMatrix(),
@@ -121,10 +118,9 @@ export default class Camera {
 
             this.#gamma = value;
 
-            this.#game.writeGlobalBuffer( 
-                  'camera',
-                  0, 
-                  Type.f32, 
+            this.#game.moveCamera( 
+                  this.#sceneId,
+                  this.#id,
                   this.multiply( 
                         this.getViewMatrix(),
                         this.getMatrix(),
@@ -140,10 +136,9 @@ export default class Camera {
                   return;
             this.#beta = value;
             
-            this.#game.writeGlobalBuffer( 
-                  'camera',
-                  0, 
-                  Type.f32, 
+            this.#game.moveCamera( 
+                  this.#sceneId,
+                  this.#id,
                   this.multiply( 
                         this.getViewMatrix(),
                         this.getMatrix(),
@@ -160,10 +155,9 @@ export default class Camera {
 
             this.#alpha = value;
             
-            this.#game.writeGlobalBuffer( 
-                  'camera',
-                  0, 
-                  Type.f32, 
+            this.#game.moveCamera( 
+                  this.#sceneId,
+                  this.#id,
                   this.multiply( 
                         this.getViewMatrix(),
                         this.getMatrix(),
@@ -256,12 +250,34 @@ export default class Camera {
 
             return [
 
-                  c*e,	-a*f+b*d*e,	b*f+a*d*e,	-a*f*y+b*f*z+c*x*e+b*d*y*e+a*d*z*e,
-                  c*f,	 b*d*f+a*e,	a*d*f-b*e,	 c*f*x+b*d*f*y+a*d*f*z+a*y*e-b*z*e,
-                  -d,	       b*c,	      a*c,	                  -d*x+b*c*y+a*c*z,
-                  0,	         0,	        0,	                                 1,
-
+                  c*e,	                              c*f,                               -d,                      0,
+                  -a*f+b*d*e,                         b*d*f+a*e,                         b*c,                     0,
+                  b*f+a*d*e,                          a*d*f-b*e,                         a*c,                     0,
+                  -a*f*y+b*f*z+c*x*e+b*d*y*e+a*d*z*e, c*f*x+b*d*f*y+a*d*f*z+a*y*e-b*z*e, -d*x+b*c*y+a*c*z,        1,
             ];
+      }
+
+      /**
+       * 
+       * @param {Partial<CameraMovement>} movement 
+       */
+      moveTo( movement ){
+            this.#position.x = movement.x || this.#position.x;
+            this.#position.y = movement.y || this.#position.y;
+            this.#position.z = movement.z || this.#position.z;
+
+            this.#alpha = movement.roll || this.#alpha;
+            this.#beta = movement.pitch || this.#beta;
+            this.#gamma = movement.yaw || this.#gamma;
+
+            this.#game.moveCamera( 
+                  this.#sceneId,
+                  this.#id,
+                  this.multiply( 
+                        this.getViewMatrix(),
+                        this.getMatrix(),
+                  )
+            );
       }
 }
 

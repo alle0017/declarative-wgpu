@@ -4,6 +4,11 @@ import { BufferUsage, TypeConstructor, TypeMap, TypeFormat, Type, DEFAULT_CAMERA
 export default class Renderer {
 
       /**
+       * @type {Map<string,Blob>}
+       */
+      static #preloadedImages = new Map();
+
+      /**
        * @type {Map<string,GPUBuffer>}
        */
       #globalBuffers = new Map();
@@ -84,14 +89,27 @@ export default class Renderer {
        * @returns {Promise<ImageBitmap>}  
        */
       static #loadImage = async ( url, x, y, width, height ) => {
-            const res = await fetch(url);
-            const blob = await res.blob();
+            let blob;
+            console.log(url)
+            
+            if( this.#preloadedImages.has( url ) ){
+                  blob = this.#preloadedImages.get( url )
+            }else{
+                  const res = await fetch(url);
+                  blob = await res.blob();
+            }
+            let res;
 
-            return await createImageBitmap(
-                  blob,
-                  x,y,
-                  width, height,
-            );
+            try{
+                  res = await createImageBitmap(
+                        blob,
+                        x,y,
+                        width, height,
+                  );
+            }catch(e){
+                  throw new Error(e);
+            }
+            return res;
       }
 
       /**
@@ -162,8 +180,10 @@ export default class Renderer {
                         }
                         entries.push(descriptor);
                   }
-
-                  bindGroupLayouts.push(this.#device.createBindGroupLayout({ entries }));
+                  bindGroupLayouts.push(this.#device.createBindGroupLayout({ 
+                        label: 'layout' + i,
+                        entries 
+                  }));
             }
 
             return bindGroupLayouts;
@@ -349,10 +369,14 @@ export default class Renderer {
             let offset = 0;
 
             for( let i = 0; i < groups.length; i++ ){
+
                   /**@type {Object[]} */
                   const entries = [];
 
                   for( let j = 0; j < groups[i].length; j++ ){
+                        /**
+                         * @type {{ binding: number, resource: Object}}
+                         */
                         const entry = {};
                         uniforms.push( [] );
                         entry.binding = j;
@@ -360,6 +384,9 @@ export default class Renderer {
                         if( Renderer.#isTypeOfBuffer( groups[i][j] ) ){
                               const size = Renderer.#getBufferSize( groups[i][j] );
 
+                              /**
+                               * @type {GPUBufferBinding}
+                               */
                               entry.resource = {};
                               entry.resource.size = size;
 
@@ -398,7 +425,7 @@ export default class Renderer {
                               const height = groups[i][j].resource['height'] - (groups[i][j].resource['offsetY'] || 0);
 
             
-                              entry.resource = this.#device.createTexture({
+                              const texture = this.#device.createTexture({
                                     dimension: groups[i][j].resource['dimension'] || '2d',
                                     format: groups[i][j].resource['format'],
                                     size: [ width, height, 1 ],
@@ -407,19 +434,26 @@ export default class Renderer {
 
                               this.#device.queue.copyExternalImageToTexture(
                                     { source },
-                                    { texture: entry.resource },
+                                    { texture },
                                     [ width, height ]
                               );
 
                               uniforms[i].push({
                                     width,
                                     height,
-                                    texture: entry.resource,
+                                    texture,
                                     size: undefined,
                                     offset: undefined,
                                     type: undefined,
                               });
+                              /**
+                               * @type {GPUTextureView}
+                               */
+                              entry.resource = texture.createView();
                         }else{
+                              /**
+                               * @type {GPUSampler}
+                               */
                               entry.resource = this.#device.createSampler({
                                     addressModeU: groups[i][j].resource['addressMode'].u || 'clamp-to-edge',
                                     addressModeV: groups[i][j].resource['addressMode'].v || 'clamp-to-edge',
@@ -441,6 +475,7 @@ export default class Renderer {
                                     offset: undefined,
                                     type: undefined,
                                     texture: undefined,
+                                    sampler: entry.resource,
                               });
                         }
 
@@ -448,14 +483,17 @@ export default class Renderer {
                         
                   }
 
+                  console.log(entries);
+
                   bindGroups.push( 
                         this.#device.createBindGroup({
-                              label: 'group'+i,
+                              label: 'group'+ i,
                               layout: bindGroupLayouts[i],
                               entries,
                         })
                   );
             }
+           
 
             return {
                   bindGroups,
@@ -483,7 +521,10 @@ export default class Renderer {
                   code: program.code,
             });
 
-            const pipeline = this.#device.createRenderPipeline({
+            /**
+             * @type {GPURenderPipelineDescriptor}
+             */
+            const pipelineDescriptor = {
                   layout: this.#device.createPipelineLayout({
                         bindGroupLayouts,
                   }),
@@ -494,23 +535,28 @@ export default class Renderer {
                   vertex: {
                         entryPoint: program.vertexEntryPoint || 'vertex_main',
                         module,    
-                        buffers: [{
-                              arrayStride: stride,
-                              attributes,
-                        }],
+                        
                   },
                   fragment: {
                         module,
                         entryPoint: program.fragmentEntryPoint || 'fragment_main',
                         targets: [ { format: this.#format }],
-                        
                   },
                   depthStencil: {
                         depthWriteEnabled: true,
                         depthCompare: 'less',
                         format: 'depth24plus',
                   },
-            });
+            };
+
+            if( vertexBuffer ){
+                  pipelineDescriptor.vertex.buffers = [{
+                        arrayStride: stride,
+                        attributes,
+                  }];
+            }
+
+            const pipeline = this.#device.createRenderPipeline(pipelineDescriptor);
 
             
             this.#device.popErrorScope().then( error => {
@@ -547,6 +593,7 @@ export default class Renderer {
                    * @param {string | number[] } resource
                    */
                   async updateBinding( group, binding, resource ){
+                        console.log('updateBinding')
 
                         __device__.pushErrorScope('out-of-memory');
                         __device__.pushErrorScope('validation');
@@ -569,7 +616,7 @@ export default class Renderer {
                                     ]
                               );
                         }else if( 'type' in uniforms[ group ][ binding ] && resource instanceof Array ){  
-
+                              console.log( uniforms[ group ][ binding ])
                               const array = new TypeConstructor[uniforms[ group ][ binding ]['type']]( resource );   
 
                               __device__.queue.writeBuffer(

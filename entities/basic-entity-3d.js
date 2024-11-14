@@ -1,6 +1,5 @@
 import Entity from "./entity.js";
 import { Type } from "../enums.js";
-import { PerspectiveCamera } from "../camera/camera.js";
 /**@import {GPUApp, Shape, Color,} from '../type.d.ts' */
 
 
@@ -11,15 +10,20 @@ export default class BasicEntity3D extends Entity {
        * 
        * @param {GPUApp} engine 
        * @param {Shape} shape
-       * @param {Color} color
+       * @param {Color | number[]} color
        */
       constructor( engine, shape, color ){
             super( engine );
 
             const colors = [];
 
-            for( let i = 0; i < shape.vertices.length/3; i++ )
-                  colors.push( color.r, color.g, color.b, color.a );
+            if( color instanceof Array ){
+                  colors.push(...color);
+            }else{
+                  for( let i = 0; i < shape.vertices.length/3; i++ )
+                        colors.push( color.r, color.g, color.b, color.a );
+            }
+            
 
             this
             .create({
@@ -61,7 +65,3 @@ export default class BasicEntity3D extends Entity {
             .update( 0, 0, this.getMatrix() );
       }
 }
-
-  
-    
-   

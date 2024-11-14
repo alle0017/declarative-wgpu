@@ -222,6 +222,8 @@ type UniformDescriptor = {
       width?: number,
       height?: number,
       texture?: GPUTexture,
+
+      sampler?: GPUSampler
 }
 type GPUBindingUniform = number[] | string;
 
@@ -266,6 +268,11 @@ type Shape = {
       vertices: number[],
       indices: number[],
 }
+type TextureShape = {
+      textureCoordinates: number[],
+      texture: Texture,
+      sampler: Sampler,
+} & Shape;
 
 type LifecycleFunctions = {
       create?: (( game: Game )=> void) | (( game: Game )=> { [ key: string]: unknown });
@@ -284,3 +291,21 @@ type PerspectiveCameraDescriptor = {
       near: number,
       far: number,
 }
+type GPUExecutableRefCounter = {
+      executable: GPUExecutable,
+      count: number,
+}
+
+type GPUShaderRef = {
+      executable: GPUExecutable, 
+      shaderId: string
+};
+
+type CameraMovement = {
+      roll: number,
+      yaw: number,
+      pitch: number,
+      x: number,
+      y: number,
+      z: number,
+};

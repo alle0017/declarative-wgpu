@@ -1,7 +1,7 @@
 import { Type } from "../enums.js";
 import Camera from "./prototype.js";
 
-/**@import {GPUApp, Mat4x4, PerspectiveCameraDescriptor} from "../type.d.ts" */
+/**@import {Mat4x4, PerspectiveCameraDescriptor} from "../type.d.ts" */
 /**@import Scene from "../scene.js" */
 
 export class PerspectiveCamera extends Camera {

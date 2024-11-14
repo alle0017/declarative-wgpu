@@ -1,7 +1,7 @@
 import Entity from "./entities/entity.js";
 import { PerspectiveCamera } from "./camera/camera.js";
 /**@import Game from "../game.js"; */
-/**@import {Mat4x4, PerspectiveCameraDescriptor} from "./type.d.ts" */
+/**@import {Mat4x4, PerspectiveCameraDescriptor, CameraMovement} from "./type.d.ts" */
 /**@import Camera from "./camera/prototype.js" */
 
 /**
@@ -75,7 +75,15 @@ game.changeScene( Chapter1 );
  */
 export default class Scene {
 
-      static #sceneId = 0;
+      /**
+       * @type {Map<string, number>}
+       */
+      static #sceneIdMap = new Map();
+
+      /**
+       * @type {number}
+       */
+      static #incrementalId = 0;
 
       /**
        * @type {Entity[]}
@@ -111,8 +119,16 @@ export default class Scene {
        * @abstract
        */
       constructor( game ){
+            const protoName = Object.getPrototypeOf(this).constructor.name;
+
             this.#game = game;
-            this.#id = Scene.#sceneId++;
+
+            if( Scene.#sceneIdMap.has( protoName ) ){
+                  this.#id = Scene.#sceneIdMap.get( protoName );
+            }else{
+                  this.#id = Scene.#incrementalId++;
+                  Scene.#sceneIdMap.set( protoName, this.#id );
+            }
       }
 
       __draw__(){
@@ -149,10 +165,21 @@ export default class Scene {
             );
 
             this.#cameras.set( id, cam );
+
+            return this;
       }
 
-      //TODO
-      //moveCamera(){}
+      /**
+       * @param {string} id 
+       * @param {Partial<CameraMovement>} movement 
+       */
+      moveCamera( id, movement ){
+            const camera = this.#cameras.get( id )
+            if( !camera )
+                  throw new ReferenceError(`[wgpu] no camera with id ${id}`);
+            camera.moveTo( movement );
+            return this;
+      }
 
       /**
        * 

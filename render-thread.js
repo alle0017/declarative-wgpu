@@ -12,7 +12,9 @@ SlaveThread.onMessage( Msg.canvasPassed, async ev => {
       SlaveThread.onMessage( Msg.createEntity, e =>{
             engine.create( e.id, e.program );
       });
-
+      SlaveThread.onMessage( Msg.freeEntity, e => {
+            engine.freeEntity( e.id );
+      });
       SlaveThread.onMessage( Msg.addToScene, e =>{
             engine.addToScene( e.id )
       });

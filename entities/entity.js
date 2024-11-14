@@ -17,6 +17,7 @@ export default class Entity {
 
       /**
        * @protected
+       * @type {string}
        * @readonly
        */
       static fragmentShader = /*wgsl*/`
@@ -28,6 +29,7 @@ export default class Entity {
 
       /**
        * @protected
+       * @type {string}
        * @readonly
        */
       static vertexShader = /*wgsl*/`

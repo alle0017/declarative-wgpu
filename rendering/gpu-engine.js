@@ -3,7 +3,16 @@ import Drawer from "./drawer.js";
 import { DEFAULT_CAMERA_BUFFER_ID, TypeConstructor, Type, } from "../enums.js";
 
 /**
- * @import { GPUCompilableProgram, GPUExecutable, VertexBuffer, UniformDescriptor, GPUApp, VertexTransferable, } from "../type.d.ts";
+ * @import { 
+ * GPUCompilableProgram, 
+ * GPUExecutable, 
+ * VertexBuffer, 
+ * UniformDescriptor, 
+ * GPUApp, 
+ * VertexTransferable, 
+ * GPUExecutableRefCounter, 
+ * GPUShaderRef, 
+ * } from "../type.d.ts";
  */
 
 /**
@@ -37,12 +46,16 @@ export default class GPUEngine {
       #drawer;
 
       /**
-       * @type {Map<string, GPUExecutable>} //Object.<string,GPUExecutable>}
+       * @type {Map<string,GPUShaderRef>}
        */
       #idExecMap = new Map();
+      /**
+       * @type {Map<string,Promise>}
+       */
+      #isPending = new Map();
 
       /**
-       * @type {Map<string, GPUExecutable>} type {Object.<string,GPUExecutable>}
+       * @type {Map<string,GPUExecutableRefCounter>}
        */
       #codeExecMap = new Map();
 
@@ -80,7 +93,7 @@ export default class GPUEngine {
             attrib.forEach( buff => {
                   map[buff.location] = new TypeConstructor[buff.type](buff.values).join(',');
             })
-            return map.reduce( (p,v) => p + '/' + v );
+            return map.length ? map.reduce( (p,v) => p + '/' + v ) : '';
       }
 
       /**
@@ -176,16 +189,85 @@ export default class GPUEngine {
             if( this.#idExecMap.has( id ) ){
                   throw new ReferenceError(`[wgpu] id ${id} is already in use`);
             }
+
             const shaderId = GPUEngine.#getShaderId( program ) + GPUEngine.#attribToString( program.vertexDescriptor );
             
             if( this.#codeExecMap.has( shaderId ) ){
-                  this.#idExecMap.set( id, await this.#renderer.cloneProgram( program, this.#codeExecMap.get( shaderId ) ) );
-            }else{
-                  const executable = await this.#renderer.createProgram( program );
+                  const ref = this.#codeExecMap.get( shaderId );
 
-                  this.#idExecMap.set( id, executable );
-                  this.#codeExecMap.set( shaderId, executable );
+                  this.#idExecMap.set( id, {
+                        executable: await this.#renderer.cloneProgram( program, ref.executable ),
+                        shaderId,
+                  });
+                  ref.count++;
+            }else{
+                  const promise = this.#renderer.createProgram( program );
+
+                  this.#isPending.set( id, promise );
+
+                  const executable = await promise;
+
+                  this.#idExecMap.set( id, {
+                        executable,
+                        shaderId,
+                  });
+                  this.#codeExecMap.set( shaderId, {
+                        executable,
+                        count: 1,
+                  });
+
+                  this.#isPending.delete( id );
             }     
+      }
+
+      /**
+       * 
+       * @param {string} id 
+       */
+      async freeEntity( id ){
+            if( this.#isBusy ){
+                  this.#events.push({
+                        method: 'freeEntity',
+                        args: [id],
+                  });
+                  return;
+            }
+
+            if( !this.#idExecMap.has( id ) ){
+                  const promise = this.#isPending.get( id );
+
+                  if( promise ){
+                        await promise;
+                  }else
+                        throw new ReferenceError(`[wgpu] no entity with id ${id}`);
+            }
+
+            this.removeFromScene( id );
+
+            const idRef = this.#idExecMap.get( id );
+            const ref = this.#codeExecMap.get( idRef.shaderId );
+
+            ref.count--;
+
+            this.#drawer.remove( idRef.executable );
+            ref.executable.uniformBuffer.destroy();
+
+            if( ref.count <= 0 ){
+                  ref.executable.indexBuffer.destroy();
+                  ref.executable.vertexBuffer.destroy();
+
+                  for( let i = 0; i < ref.executable.uniforms.length; i++ ){
+                        const group = ref.executable.uniforms[i];
+
+                        for( let j = 0; j < group.length; j++ ){
+                              if( group[j].texture ){
+                                    group[j].texture.destroy();
+                              }
+                        }
+                  }
+                  this.#codeExecMap.delete( idRef.shaderId );
+            }
+            this.#idExecMap.delete( id );
       }
 
       /**
@@ -245,7 +327,7 @@ export default class GPUEngine {
        * the method may fail if the given id doesn't exists.
        * @param {string} id 
        */
-      addToScene( id ){
+      async addToScene( id ){
 
             if( this.#isBusy ){
                   this.#events.push({
@@ -255,10 +337,16 @@ export default class GPUEngine {
                   return;
             }
 
-            if( !this.#idExecMap.has( id ) )
-                  throw new ReferenceError(`[wgpu] no entity with id ${id}`);
+            if( !this.#idExecMap.has( id ) ){
+                  const promise = this.#isPending.get( id );
 
-            this.#drawer.add( this.#idExecMap.get( id ) );
+                  if( promise ){
+                        await promise;
+                  }else
+                        throw new ReferenceError(`[wgpu] no entity with id ${id}`);
+            }
+
+            this.#drawer.add( this.#idExecMap.get( id ).executable );
             this.#drawer.sort();
       }
 
@@ -266,7 +354,7 @@ export default class GPUEngine {
        * 
        * @param {string} id 
        */
-      removeFromScene( id ){
+      async removeFromScene( id ){
             if( this.#isBusy ){
                   this.#events.push({
                         method: 'removeFromScene',
@@ -275,10 +363,16 @@ export default class GPUEngine {
                   return;
             }
 
-            if( !this.#idExecMap.has( id ) )
-                  throw new ReferenceError(`[wgpu] no entity with id ${id}`);
+            if( !this.#idExecMap.has( id ) ){
+                  const promise = this.#isPending.get( id );
+
+                  if( promise ){
+                        await promise;
+                  }else
+                        throw new ReferenceError(`[wgpu] no entity with id ${id}`);
+            }
             
-            this.#drawer.remove( this.#idExecMap.get( id ) );
+            this.#drawer.remove( this.#idExecMap.get( id ).executable );
       }
 
       /**
@@ -299,15 +393,22 @@ export default class GPUEngine {
                   return;
             }
 
-            if( !this.#idExecMap.has( id ) )
-                  throw new ReferenceError(`[wgpu] no entity with id ${id}`);
+            if( !this.#idExecMap.has( id ) ){
+                  const promise = this.#isPending.get( id );
 
-            const updated = this.#idExecMap.get( id );
+                  if( promise ){
+                        await promise;
+                  }else
+                        throw new ReferenceError(`[wgpu] no entity with id ${id}`);
+            }
+
+            const updated = this.#idExecMap.get( id ).executable;
             updated.z = z;
             this.#drawer.sort();
 
             await updated.updateBinding( group, binding, resource );
       }
+
       /**
        * 
        * @param {string} bufferId 
